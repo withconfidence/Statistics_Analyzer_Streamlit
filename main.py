@@ -11,6 +11,7 @@ import streamlit as st
 from page_explore import page_explore
 from page_fit import page_fit
 from page_introduction import page_introduction
+from page_comparison import page_comparison
 
 # Use random seed
 import numpy as np
@@ -45,6 +46,7 @@ def main():
         "Introduction": page_introduction,
         "Explore distributions": page_explore,
         "Fit distributions": page_fit,
+        "Compare Distribution": page_comparison,
     }
 
     st.sidebar.title("Main options")

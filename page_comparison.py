@@ -12,7 +12,9 @@ import cmasher as cmr
 import numpy as np
 #from scipy import stats
 import scipy.stats
+from scipy.stats import wasserstein_distance, energy_distance,  ks_2samp
 import math
+import json
 
 from bokeh.plotting import figure
 from bokeh.models import Legend
@@ -20,14 +22,14 @@ from bokeh.models import Legend
 
 # Helper function imports
 # These are pre-computed so that they don't slow down the App
-from helper_functions import distr_selectbox_names,creating_dictionaries
+from helper_functions import distr_selectbox_names, creating_dictionaries, calculate_psi
 
 import time
 import base64
 import collections
 
 
-def page_fit():
+def page_comparison():
     """
     The fit page in this app made with Streamlit is for a fitting a selected
     distribution(s) to the User imported data.
@@ -58,20 +60,32 @@ def page_fit():
     #[server]
     #maxUploadSize=2
     
-    # Using cache as we perform only once 'loading' of the data
-    @st.cache
-    def load_csv():
-        """ Get the loaded .csv into Pandas dataframe. """
-    
-        df_load = pd.read_csv(input, sep=None , engine='python',
-                             encoding='utf-8')
-        return df_load
+    # # Using cache as we perform only once 'loading' of the data
+    # @st.cache
+    # def load_csv():
+    #     """ Get the loaded .csv into Pandas dataframe. """
+    #
+    #     df_load_1 = pd.read_csv(input_1, sep=None , engine='python',
+    #                          encoding='utf-8')
+    #
+    #     return df_load_1
+    #
+    # # Using cache as we perform only once 'loading' of the data
+    # @st.cache
+    # def load_csv_2():
+    #     """ Get the loaded .csv into Pandas dataframe. """
+    #
+    #     df_load_2 = pd.read_csv(input_2, sep=None, engine='python',
+    #                             encoding='utf-8')
+    #
+    #     return df_load_2
    
-    # Streamlit - upload a file
-    input = st.file_uploader('')
+    # Streamlit - upload files
+    input_1 = st.file_uploader('Choose first CSV file')
+    input_2 = st.file_uploader('Choose second CSV file')
     
     # Ask for upload if not yet.
-    if input is None:
+    if input_1 is None or input_2 is None:
         st.write('Upload your data, or:')
         download_sample = st.checkbox("Download sample data")
     
@@ -84,11 +98,14 @@ def page_fit():
 
     except:
         # If the user imports file - parse it, and ask User to select a column.
-        if input:
+        if input_1 and input_2:
             with st.spinner('Loading data...'):
                 # Pass to a function above so we can use st.cache
-                df = load_csv()
-                columns = list(df.columns)
+                df1 = pd.read_csv(input_1, sep=None, engine='python', encoding='utf-8')
+                columns1 = list(df1.columns)
+                df2 = pd.read_csv(input_2, sep=None, engine='python', encoding='utf-8')
+                columns2 = list(df2.columns)
+                columns = [x + " : " + y for x, y in zip(columns1, columns2)]
     
                 # User can see which columns are present in the imported file
                 st.write("Available columns (expand to see):")
@@ -97,11 +114,14 @@ def page_fit():
                 # Select menu for User to pick the data
                 # This 'data_col' selection is parsed as selected dataframe
                 data_col = st.selectbox("Select input",
-                                        options = columns,
-                                        format_func=lambda x: x)
+                                        options=list(range(len(columns))),
+                                        format_func=lambda x: columns[x])
                 # Get the selected column
                 # Replace inf/-inf with NaN and remove NaN if present
-                df = df[data_col].replace([np.inf, -np.inf], np.nan).dropna()
+                key_col1 = df1.columns[data_col]
+                df1 = df1[key_col1].replace([np.inf, -np.inf], np.nan).dropna()
+                key_col2 = df2.columns[data_col]
+                df2 = df2[key_col2].replace([np.inf, -np.inf], np.nan).dropna()
             
     
     def plot(df, data_stat):
@@ -596,7 +616,7 @@ def page_fit():
         
         st.code(f"{generate_fit_code}")    
 
-    def py_file_downloader(py_file_text):
+    def result_downloader(_text_):
         """
         Strings <-> bytes conversions and creating a link which will
         download generated python script.
@@ -606,11 +626,11 @@ def page_fit():
         time_stamp = time.strftime("%Y%m%d_%H%M%S")
 
         # Base64 takes care of porting info to the data
-        b64 = base64.b64encode(py_file_text.encode()).decode()
+        b64 = base64.b64encode(_text_.encode()).decode()
         
         # Saved file will have distribution name and the timestamp
-        code_file = f"{best_dist}_{time_stamp}.py"
-        st.markdown(f'** Download Python File **: \
+        code_file = f"{time_stamp}.json"
+        st.markdown(f'** Export Result **: \
                     <a href="data:file/txt;base64,{b64}" \
                         download="{code_file}">Click Here</a>', 
                         unsafe_allow_html=True)
@@ -632,185 +652,202 @@ def page_fit():
             <a href="data:file/csv;base64,{b64}" \
             download="{new_filename}">Click Here</a>'
         st.markdown(href, unsafe_allow_html=True)
-    
-    # Distribution names
-    dis = distr_selectbox_names()
+
+    def plot_comparison(df1, df2):
+        """
+        Histogram of the input data. Contains also information about the
+        Figure style, depending on the active Mode.
+        """
+
+        if plot_mode == 'Light Mode':
+            hist_edge_color = 'black'
+            hist_color = 'white'
+            quant_color = 'black'
+            median_color = 'black'
+            pdf_color = '#08519c'
+            cdf_color = 'black'
+            plt.style.use('classic')
+            plt.rcParams['figure.facecolor'] = 'white'
+
+        else:
+            hist_edge_color = 'black'
+            hist_color = 'white'
+            median_color = 'magenta'
+            quant_color = 'white'
+            pdf_color = '#fec44f'
+            cdf_color = 'white'
+            plt.style.use('dark_background')
+            plt.rcParams['figure.facecolor'] = 'black'
+
+        fig, ax = plt.subplots(1, 1)
+
+        bins = round(math.sqrt(max(len(df1), len(df2))))
+        # Plot hist
+        # ax.hist([df1, df2], bins=bins)
+                # density=True, color=hist_color,
+                # ec=hist_edge_color, alpha=0.3)
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+        plt.tick_params(top=False, bottom=True, left=True, right=False,
+                        labelleft=True, labelbottom=True)
+
+        ax.set_xlabel(f'{data_col}')
+        ax.set_ylabel('Density')
+
+        x_plot = np.linspace(min(min(df1), min(df2)), max(max(df1), max(df2)), max(len(df1), len(df2)))
+        q = [0.05, 0.25, 0.50, 0.75, 0.95]
+        n = ['5th', '25th', '50th', '75th', '95th']
+
+        # For First Data
+        # Hist contains tuple: n bins, (n+1) bin boundaries
+        hist1 = np.histogram(df1, bins=bins)
+        # hist_2 = np.histogram(df2, bins=round(math.sqrt(len(df2))))
+        # Generates a distribution given by a histogram.
+        hist_dist1 = scipy.stats.rv_histogram(hist1)
+
+        quantiles1 = df1.quantile(q)
+        q_max1 = hist_dist1.cdf(quantiles1)
+        for i, qu in enumerate(quantiles1):
+            ax.plot(qu, q_max1[i], alpha=0.5, color="red",
+                    markersize=10, marker='D')
+            ax.text(qu, q_max1[i] + (q_max1[i] / 10), f'{n[i]}', ha='center',
+                    color="red", alpha=0.5)
+
+        # The pdf is defined as a stepwise function from the provided histogram.
+        # The cdf is a linear interpolation of the pdf.
+        ax.plot(x_plot, hist_dist1.cdf(x_plot), linewidth=2,
+                color="red", label='First')
+
+        ax.vlines(np.mean(df1), ymin=0, ymax=hist_dist1.cdf(np.mean(df1)),
+                  color='red', linestyle='--', linewidth=2,
+                  label=f'Mean {round(np.mean(df1), 2)}')
+        ax.vlines(np.median(df1), ymin=0, ymax=hist_dist1.cdf(np.median(df1)),
+                  color=median_color, linestyle='--', linewidth=2,
+                  label=f'Median {round(np.median(df1), 2)}')
+
+
+        # For Second Data
+        # Hist contains tuple: n bins, (n+1) bin boundaries
+        hist2 = np.histogram(df2, bins=bins)
+        # Generates a distribution given by a histogram.
+        hist_dist2 = scipy.stats.rv_histogram(hist2)
+        quantiles2 = df2.quantile(q)
+        q_max2 = hist_dist2.cdf(quantiles2)
+        for i, qu in enumerate(quantiles2):
+            ax.plot(qu, q_max2[i], alpha=0.5, color="blue",
+                    markersize=10, marker='D')
+            ax.text(qu, q_max2[i] + (q_max2[i] / 10), f'{n[i]}', ha='center',
+                    color="blue", alpha=0.5)
+        # The pdf is defined as a stepwise function from the provided histogram.
+        # The cdf is a linear interpolation of the pdf.
+        ax.plot(x_plot, hist_dist2.cdf(x_plot), linewidth=2,
+                color="blue", label='Second')
+
+
+
+        # The pdf is defined as a stepwise function from the provided histogram.
+        # The cdf is a linear interpolation of the pdf.
+        # ax.plot(x_plot, hist_dist.pdf(x_plot), linewidth=2,
+        #         color=pdf_color, label='PDF')
+
+
+        ax.vlines(np.mean(df2), ymin=0, ymax=hist_dist2.cdf(np.mean(df2)),
+                  color='red', linestyle='--', linewidth=2,
+                  label=f'Mean {round(np.mean(df2), 2)}')
+        ax.vlines(np.median(df2), ymin=0, ymax=hist_dist2.cdf(np.median(df2)),
+                  color=median_color, linestyle='--', linewidth=2,
+                  label=f'Median {round(np.median(df2), 2)}')
+
+        # ax.scatter([], [], alpha=0.5, color=quant_color, marker='D',
+        #            label='Percentiles')
+
+        leg = plt.legend(loc=0)
+        leg.get_frame().set_edgecolor("#525252")
+
+        return fig
+
+
 
     # Checks steps by steps to ensure the flow of the data input; examination,
     # fitting and the display of the results.
-    if input:
+    if input_1 and input_2:
         
+
+        # display_list = ["File1 Distribution", "File2 Distribution", "Compare Distribution"]
+        # display_item = st.selectbox("Select the item to be displayed.", list(range(len(display_list))), format_func=lambda x:display_list[x])
+        # if display_item == 2:
+        #     st.write("please compare distribution")
+        # else:
+            # if display_item == 0:
+            #     df = df1
+            # else:
+            #     df = df2
         st.write("Examine your data:")
-        
-        data_plot = st.checkbox('Plot my data')
-        data_stat =  st.checkbox("Sample statistics", value=False)
-        if data_plot:
-            st.pyplot(plot(df, data_stat))
-        
-        # Add an option to have a 'Select All' distribution
-        dis_with_all =[]
-        dis_with_all = dis[:]
-        dis_with_all.append('All_distributions')
+        col1, col2 = st.columns(2)
+        display_dist = col1.checkbox('Show Sample Distribution')
+        compare_dist = col2.checkbox("Compare Distribution", value=False)
+        df1_info = {
+            "Max": max(df1),
+            "Min": min(df1),
+            "Mean": np.mean(df1),
+            "Median": np.median(df1)}
+        df2_info = {
+            "Max": max(df2),
+            "Min": min(df2),
+            "Mean": np.mean(df2),
+            "Median": np.median(df2)}
+        if display_dist:
+            st.write("File1 Distribution")
+            st.pyplot(plot(df1, True))
+            st.info(df1_info)
+            st.write("File2 Distribution")
+            st.pyplot(plot(df2, True))
+            st.info(df2_info)
+        if compare_dist:
 
-        chosen_distr = st.multiselect('Choose distributions to fit', 
-                                      dis_with_all)
-        # Remove problematic distributions
-        if 'All_distributions' in chosen_distr:
-            dis.remove('levy_stable')
-            dis.remove('kstwo')
-            chosen_distr = dis
-          
-        # Give warnings if User selects problematic distributions
-        if chosen_distr:
-            if 'kstwo' in chosen_distr:
-                st.warning("User, be aware that **kstwo**\
-                           distribution has some issues and will not compute.")
-            
-            if 'levy_stable' in chosen_distr:
-                st.warning("User, be aware that **levy_stable**\
-                           distribution will take several minutes to compute.")
-            
-            if chosen_distr == dis:
-                st.warning(" You have selected **All distributions**, due to \
-                           the slow computation of the *levy_stable* \
-                            (and errors with *kstwo*), \
-                            these distributions are removed\
-                            from the list of 'All_distributions' ")
-            
-            st.write("Do you want to fit the selected distribution(s) \
-                     to your data?")
-            
-            # Checking length of selected distributions, for a number colors
-            # that will be taken from colormap. As plot gets messy with more
-            # than 15, I limit to that; if smaller, use that number
-            if len(chosen_distr) > 15:
-                n = 15
-            else:
-                n = len(chosen_distr)
-                
-            # Fit
-            fit_confirmation =  st.checkbox("Yes, please.", value=False)
-            
-            if fit_confirmation:
-                with st.spinner("Fitting... Please wait a moment."):
-                    results = fit_data(df)
-                                
-            # After fitting, checkbox apears and when clicked: user get 
-            # options which results they want to see, as they are several
-            if fit_confirmation:
-                st.write('Results are ready, select what you wish to see:')   
+            st.pyplot(plot_comparison(df1, df2))
 
-                if st.checkbox('Interactive Figures'):
-                    st.info('Interactive Figure: click on the legend to \
-                        enhance selected fit.')
-                    p1 =  bokeh_pdf_plot_results(df, results, n) #p2
-                    st.bokeh_chart(p1)
-                    st.info('Interactive Figure: Comparing CDFs')
-                    p2 =  bokeh_cdf_plot_results(df, results, n)
-                    st.bokeh_chart(p2)
-                
-                if st.checkbox('Table'):
-                    st.info('DataFrame: all fitted distributions\
-                        and their SSE (sum of squared estimate of errors).')
-                    st.dataframe(results_to_dataframe(df, results))
-                    csv_downloader(results_to_dataframe(df, results))
-                    
+            eval_labels = [
+                "Kolmogorov–Smirnov (KS) test",
+                "First Wassertein Distance (Earth Mover’s distance)",
+                "Cramér - von Mises(CM) distance(Energy distance)",
+                "Population StabilityIndex (PSI)"
+            ]
+            display_item = st.multiselect("Select the items to be displayed.", list(range(len(eval_labels))),
+                                        format_func=lambda x: eval_labels[x])
 
-                shapes, best_dist, best_scale, best_loc, args, fit_params_all \
-                    = produce_output_for_code_download_parameters(df, results)
+            two_sided_stat, two_sided_p = ks_2samp(df1, df2, alternative="two_sided")
+            less_stat, less_p = ks_2samp(df1, df2, alternative="less")
+            greater_stat, greater_p = ks_2samp(df1, df2, alternative="greater")
+            ks_stat = {
+                "two_sided": {"stat": two_sided_stat, "p_value": two_sided_p},
+                "less": {"stat": less_stat, "p_value": less_p},
+                "greater": {"stat": greater_stat, "p_value": greater_p}
+            }
 
-                # Fitting outputs are parsed to the f string below
-                generate_fit_code = f"""
-# -*- coding: utf-8 -*-
-# Generated using Distribution Analyser:
-# https://github.com/rdzudzar/DistributionAnalyser
-# {time.strftime("%Y%m%d_%H%M%S")}
-# ---
+            st.info("Kolmogorov–Smirnov Test")
+            st.table(ks_stat)
+            other_index = {
+                # {"ks": ks_stat},
+                "First Wasserstein Distance": [wasserstein_distance(u_values=df1, v_values=df2)],
+                "Cramér - von Mises(CM) distance(Energy distance)": [energy_distance(df1, df2)],
+                "Population Stability Index(PSI)": [calculate_psi(df1, df2)]
+            }
+            other_index_df = pd.DataFrame(other_index)
+            st.info("Other Type of Distances")
 
-import matplotlib.pyplot as plt #v3.2.2
-import numpy as np #v1.18.5
-from scipy.stats import {best_dist} #v1.6.1
-import math
+            st.table(other_index_df.assign(hack='').set_index('hack'))
+            result = {
+                "fist_file_distribution": df1_info,
+                "second_file_distribution": df2_info,
+                "KS_test": ks_stat,
+                "wasserstein_distance": wasserstein_distance(u_values=df1, v_values=df2),
+                "cm_distance": energy_distance(df1, df2),
+                "psi": calculate_psi(df1, df2)
+            }
+            result_downloader(json.dumps(result, indent=4))
 
-# Set random seed
-np.random.seed(1)
-
-# Function parameters
-{best_scale}
-{best_loc}
-{args}              
-     
-# Generate evenly spaced numbers over a specified interval
-size = 400
-x = np.linspace({best_dist}.ppf(0.001, {shapes} loc=loc, scale=scale ), 
-                {best_dist}.ppf(0.999, {shapes} loc=loc, scale=scale ),
-                size)
-
-# Freeze the distribution
-rv = {best_dist}({shapes} loc=loc, scale=scale)
-
-# Generate random numbers
-r = {best_dist}.rvs({shapes} loc=loc, scale=scale, size=size)
-
-# Make a plot
-fig, ax = plt.subplots(1, 1)
-
-# Plot PDF, CDF and SF
-ax.plot(x, rv.pdf(x), linestyle='-', color='#3182bd', lw=3, label='PDF')
-ax.plot(x, rv.cdf(x), linestyle='-', color='k', lw=3, label='CDF')
-ax.plot(x, rv.sf(x), linestyle='-', color='#df65b0', lw=3, label='SF')
-
-###### User Data #######
-
-
-## You can plot your data on the results uncommenting following code lines
-## If You are using Pandas:
-# import pandas as pd
-# import math
-#
-## Import data
-# df = pd.read_csv('datafile_name.csv')
-# df = df['Column_name']
-
-
-## Your data instead of 'df'; can be df['Column_Name']
-
-
-## Plot histogram of your data
-#ax.hist(df, density=True, bins=20, 
-#        edgecolor='black', 
-#        fill = False, 
-#        linewidth=1, alpha=1, label='Sample distribution')
-
-
-###### End of User inpu #######
-
-# Set legend
-ax.legend(bbox_to_anchor=(0,1.1,1,0.2), 
-             loc="center", 
-             borderaxespad=0, ncol=3)
-
-# Set Figure aestetics
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.set_title(f'{best_dist}: {fit_params_all}')
-
-ax.set_xlabel('X value')
-ax.set_ylabel('Density')
-   
-plt.show()
-    """
-                # Press the button to get the python code and 
-                #   download hyperlink option
-                if st.checkbox('Generate Python Code'):
-
-                    st.info("""
-                         **Python script** with best fit
-                         distribution & parameters.
-                        """)
-                    get_code()
-                    py_file_downloader(f"{generate_fit_code}")
-
-                
 
     return
