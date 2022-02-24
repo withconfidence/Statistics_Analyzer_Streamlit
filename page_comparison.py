@@ -38,49 +38,24 @@ def page_comparison():
         all_dist_params_dict, name_url_dict = creating_dictionaries()
     
     st.sidebar.info("""
-                Import your data as a **.csv** file 
-                and follow instructions to fit a
-                continuous distribution(s) to your data.
+                Import your data as two **.csv** files 
+                and evaluate the metrics
+                of distributions to your data.
                 """)
                 
     # Add a bit empy space before showing About
     st.sidebar.text("")
 
-    st.sidebar.markdown("**Select Figure Mode:**")
-    plot_mode = st.sidebar.radio("Options", ('Dark Mode', 'Light Mode'))   
+    # st.sidebar.markdown("**Select Figure Mode:**")
+    plot_mode = 'Light Mode' # st.sidebar.radio("Options", ('Dark Mode', 'Light Mode'))   
 
     st.sidebar.text("")
     st.sidebar.text("")
 
-    st.markdown("<h1 style='text-align: center;'> Fit distribution(s) </h1>", 
+    st.markdown("<h1 style='text-align: center;'> Data Drift Detection </h1>", 
                 unsafe_allow_html=True)
 
     
-    #Streamlit Sharing if you set the config option in .streamlit/config.toml:
-    #[server]
-    #maxUploadSize=2
-    
-    # # Using cache as we perform only once 'loading' of the data
-    # @st.cache
-    # def load_csv():
-    #     """ Get the loaded .csv into Pandas dataframe. """
-    #
-    #     df_load_1 = pd.read_csv(input_1, sep=None , engine='python',
-    #                          encoding='utf-8')
-    #
-    #     return df_load_1
-    #
-    # # Using cache as we perform only once 'loading' of the data
-    # @st.cache
-    # def load_csv_2():
-    #     """ Get the loaded .csv into Pandas dataframe. """
-    #
-    #     df_load_2 = pd.read_csv(input_2, sep=None, engine='python',
-    #                             encoding='utf-8')
-    #
-    #     return df_load_2
-   
-    # Streamlit - upload files
     input_1 = st.file_uploader('Choose first CSV file')
     input_2 = st.file_uploader('Choose second CSV file')
     
@@ -122,6 +97,7 @@ def page_comparison():
                 df1 = df1[key_col1].replace([np.inf, -np.inf], np.nan).dropna()
                 key_col2 = df2.columns[data_col]
                 df2 = df2[key_col2].replace([np.inf, -np.inf], np.nan).dropna()
+                
             
     
     def plot(df, data_stat):
@@ -710,21 +686,21 @@ def page_comparison():
         quantiles1 = df1.quantile(q)
         q_max1 = hist_dist1.cdf(quantiles1)
         for i, qu in enumerate(quantiles1):
-            ax.plot(qu, q_max1[i], alpha=0.5, color="red",
+            ax.plot(qu, q_max1[i], alpha=0.5, color="#86CEFA",
                     markersize=10, marker='D')
             ax.text(qu, q_max1[i] + (q_max1[i] / 10), f'{n[i]}', ha='center',
-                    color="red", alpha=0.5)
+                    color="#86CEFA", alpha=0.5)
 
         # The pdf is defined as a stepwise function from the provided histogram.
         # The cdf is a linear interpolation of the pdf.
         ax.plot(x_plot, hist_dist1.cdf(x_plot), linewidth=2,
-                color="red", label='First')
+                color="#86CEFA", label='First')
 
         ax.vlines(np.mean(df1), ymin=0, ymax=hist_dist1.cdf(np.mean(df1)),
-                  color='red', linestyle='--', linewidth=2,
+                  color='#86CEFA', linestyle='-.', linewidth=2,
                   label=f'Mean {round(np.mean(df1), 2)}')
         ax.vlines(np.median(df1), ymin=0, ymax=hist_dist1.cdf(np.median(df1)),
-                  color=median_color, linestyle='--', linewidth=2,
+                  color="#86CEFA", linestyle='--', linewidth=2,
                   label=f'Median {round(np.median(df1), 2)}')
 
 
@@ -736,28 +712,20 @@ def page_comparison():
         quantiles2 = df2.quantile(q)
         q_max2 = hist_dist2.cdf(quantiles2)
         for i, qu in enumerate(quantiles2):
-            ax.plot(qu, q_max2[i], alpha=0.5, color="blue",
+            ax.plot(qu, q_max2[i], alpha=0.5, color="#003396",
                     markersize=10, marker='D')
             ax.text(qu, q_max2[i] + (q_max2[i] / 10), f'{n[i]}', ha='center',
-                    color="blue", alpha=0.5)
+                    color="#003396", alpha=0.5)
         # The pdf is defined as a stepwise function from the provided histogram.
         # The cdf is a linear interpolation of the pdf.
         ax.plot(x_plot, hist_dist2.cdf(x_plot), linewidth=2,
-                color="blue", label='Second')
-
-
-
-        # The pdf is defined as a stepwise function from the provided histogram.
-        # The cdf is a linear interpolation of the pdf.
-        # ax.plot(x_plot, hist_dist.pdf(x_plot), linewidth=2,
-        #         color=pdf_color, label='PDF')
-
+                color="#003396", label='Second')
 
         ax.vlines(np.mean(df2), ymin=0, ymax=hist_dist2.cdf(np.mean(df2)),
-                  color='red', linestyle='--', linewidth=2,
+                  color='#003396', linestyle='-.', linewidth=2,
                   label=f'Mean {round(np.mean(df2), 2)}')
         ax.vlines(np.median(df2), ymin=0, ymax=hist_dist2.cdf(np.median(df2)),
-                  color=median_color, linestyle='--', linewidth=2,
+                  color="#003396", linestyle='--', linewidth=2,
                   label=f'Median {round(np.median(df2), 2)}')
 
         # ax.scatter([], [], alpha=0.5, color=quant_color, marker='D',
@@ -768,22 +736,17 @@ def page_comparison():
 
         return fig
 
-
+    def split_dataframe(df, chunk_size = 10000): 
+        chunks = list()
+        num_chunks = len(df) // chunk_size + 1
+        for i in range(num_chunks):
+            chunks.append(df[i*chunk_size:(i+1)*chunk_size])
+        return chunks
 
     # Checks steps by steps to ensure the flow of the data input; examination,
     # fitting and the display of the results.
     if input_1 and input_2:
         
-
-        # display_list = ["File1 Distribution", "File2 Distribution", "Compare Distribution"]
-        # display_item = st.selectbox("Select the item to be displayed.", list(range(len(display_list))), format_func=lambda x:display_list[x])
-        # if display_item == 2:
-        #     st.write("please compare distribution")
-        # else:
-            # if display_item == 0:
-            #     df = df1
-            # else:
-            #     df = df2
         st.write("Examine your data:")
         col1, col2 = st.columns(2)
         display_dist = col1.checkbox('Show Sample Distribution')
@@ -806,37 +769,13 @@ def page_comparison():
             st.pyplot(plot(df2, True))
             st.info(df2_info)
         if compare_dist:
-
+            
             st.pyplot(plot_comparison(df1, df2))
 
-            eval_labels = [
-                "Kolmogorov–Smirnov (KS) test",
-                "First Wassertein Distance (Earth Mover’s distance)",
-                "Cramér - von Mises(CM) distance(Energy distance)",
-                "Population StabilityIndex (PSI)"
-            ]
-            # display_item = st.multiselect("Select the items to be displayed.", list(range(len(eval_labels))),
-            #                             format_func=lambda x: eval_labels[x])
-
-            two_sided_stat, two_sided_p = ks_2samp(df1, df2, alternative="two_sided")
-            less_stat, less_p = ks_2samp(df1, df2, alternative="less")
-            greater_stat, greater_p = ks_2samp(df1, df2, alternative="greater")
-            ks_stat = {
-                "two_sided": {"stat": two_sided_stat, "p_value": two_sided_p},
-                "less": {"stat": less_stat, "p_value": less_p},
-                "greater": {"stat": greater_stat, "p_value": greater_p}
-            }
 
             st.info("Kolmogorov–Smirnov Test")
             st.write("{}".format(ks_2samp(df1, df2, alternative="two_sided")))
-            # st.table(ks_stat)
-            # other_index = {
-            #     # {"ks": ks_stat},
-            #     "First Wasserstein Distance": [wasserstein_distance(u_values=df1, v_values=df2)],
-            #     "Cramér - von Mises(CM) distance(Energy distance)": [energy_distance(df1, df2)],
-            #     "Population Stability Index(PSI)": [calculate_psi(df1, df2)]
-            # }
-            # other_index_df = pd.DataFrame(other_index)
+
             st.info("First Wasserstein Distance")
             st.write(wasserstein_distance(u_values=df1, v_values=df2))
             st.info("Cramér - von Mises(CM) distance(Energy distance)")

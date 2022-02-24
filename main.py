@@ -23,11 +23,11 @@ st.set_page_config(page_title='DistributionAnalyser')
 
 logo, name = st.sidebar.columns(2)
 with logo:
-    image = 'https://raw.githubusercontent.com/rdzudzar/DistributionAnalyser/main/images/logo_da.png?token=AIAWV2ZRCFKYM42DVFTD3OLAN3CQK'
+    image = "./images/Logo.gif" # 'https://raw.githubusercontent.com/rdzudzar/DistributionAnalyser/main/images/logo_da.png?token=AIAWV2ZRCFKYM42DVFTD3OLAN3CQK'
     st.image(image, use_column_width=True)
 with name:
     st.markdown("<h1 style='text-align: left; color: grey;'> \
-                Distribution Analyser </h1>", unsafe_allow_html=True)
+                Data Drift Analyser</h1>", unsafe_allow_html=True)
 
 st.sidebar.write(" ")
 
@@ -44,8 +44,6 @@ def main():
 
     pages = {
         "Introduction": page_introduction,
-        "Explore distributions": page_explore,
-        "Fit distributions": page_fit,
         "Compare Distribution": page_comparison,
     }
 
