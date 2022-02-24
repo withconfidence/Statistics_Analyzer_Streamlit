@@ -80,8 +80,18 @@ def page_comparison():
                 columns1 = list(df1.columns)
                 df2 = pd.read_csv(input_2, sep=None, engine='python', encoding='utf-8')
                 columns2 = list(df2.columns)
-                columns = [x + " : " + y for x, y in zip(columns1, columns2)]
-    
+                columns = []
+                avail_cols = {}
+                for x, y in zip(columns1, columns2):
+                    _df1_col_ = pd.to_numeric(df1[x], errors='coerce').notnull().all()
+                    _df2_col_ = pd.to_numeric(df2[y], errors='coerce').notnull().all()
+                    if _df1_col_ and _df2_col_:                        
+                        columns.append({x + " : " + y: True})
+                        avail_cols[x + " : " + y] = [x, y]
+                    else:
+                        columns.append({x + " : " + y: False})
+
+
                 # User can see which columns are present in the imported file
                 st.write("Available columns (expand to see):")
                 st.write(columns)
@@ -89,13 +99,13 @@ def page_comparison():
                 # Select menu for User to pick the data
                 # This 'data_col' selection is parsed as selected dataframe
                 data_col = st.selectbox("Select input",
-                                        options=list(range(len(columns))),
-                                        format_func=lambda x: columns[x])
+                                        options=list(range(len(avail_cols))),
+                                        format_func=lambda x: list(avail_cols.keys())[x])
                 # Get the selected column
                 # Replace inf/-inf with NaN and remove NaN if present
-                key_col1 = df1.columns[data_col]
+                key_col1 = list(avail_cols.values())[data_col][0]
                 df1 = df1[key_col1].replace([np.inf, -np.inf], np.nan).dropna()
-                key_col2 = df2.columns[data_col]
+                key_col2 = list(avail_cols.values())[data_col][1]
                 df2 = df2[key_col2].replace([np.inf, -np.inf], np.nan).dropna()
                 
             
@@ -686,10 +696,10 @@ def page_comparison():
         quantiles1 = df1.quantile(q)
         q_max1 = hist_dist1.cdf(quantiles1)
         for i, qu in enumerate(quantiles1):
-            ax.plot(qu, q_max1[i], alpha=0.5, color="#86CEFA",
+            ax.plot(qu, q_max1[i], alpha=0.8, color="#86CEFA",
                     markersize=10, marker='D')
             ax.text(qu, q_max1[i] + (q_max1[i] / 10), f'{n[i]}', ha='center',
-                    color="#86CEFA", alpha=0.5)
+                    color="#86CEFA", alpha=0.8)
 
         # The pdf is defined as a stepwise function from the provided histogram.
         # The cdf is a linear interpolation of the pdf.
@@ -712,20 +722,20 @@ def page_comparison():
         quantiles2 = df2.quantile(q)
         q_max2 = hist_dist2.cdf(quantiles2)
         for i, qu in enumerate(quantiles2):
-            ax.plot(qu, q_max2[i], alpha=0.5, color="#003396",
+            ax.plot(qu, q_max2[i], alpha=0.8, color="#90EE90",
                     markersize=10, marker='D')
             ax.text(qu, q_max2[i] + (q_max2[i] / 10), f'{n[i]}', ha='center',
-                    color="#003396", alpha=0.5)
+                    color="#90EE90", alpha=0.8)
         # The pdf is defined as a stepwise function from the provided histogram.
         # The cdf is a linear interpolation of the pdf.
         ax.plot(x_plot, hist_dist2.cdf(x_plot), linewidth=2,
-                color="#003396", label='Second')
+                color="#90EE90", label='Second')
 
         ax.vlines(np.mean(df2), ymin=0, ymax=hist_dist2.cdf(np.mean(df2)),
-                  color='#003396', linestyle='-.', linewidth=2,
+                  color='#90EE90', linestyle='-.', linewidth=2,
                   label=f'Mean {round(np.mean(df2), 2)}')
         ax.vlines(np.median(df2), ymin=0, ymax=hist_dist2.cdf(np.median(df2)),
-                  color="#003396", linestyle='--', linewidth=2,
+                  color="#90EE90", linestyle='--', linewidth=2,
                   label=f'Median {round(np.median(df2), 2)}')
 
         # ax.scatter([], [], alpha=0.5, color=quant_color, marker='D',
