@@ -828,21 +828,27 @@ def page_comparison():
             }
 
             st.info("Kolmogorov–Smirnov Test")
-            st.table(ks_stat)
-            other_index = {
-                # {"ks": ks_stat},
-                "First Wasserstein Distance": [wasserstein_distance(u_values=df1, v_values=df2)],
-                "Cramér - von Mises(CM) distance(Energy distance)": [energy_distance(df1, df2)],
-                "Population Stability Index(PSI)": [calculate_psi(df1, df2)]
-            }
-            other_index_df = pd.DataFrame(other_index)
-            st.info("Other Type of Distances")
+            st.write("{}".format(ks_2samp(df1, df2, alternative="two_sided")))
+            # st.table(ks_stat)
+            # other_index = {
+            #     # {"ks": ks_stat},
+            #     "First Wasserstein Distance": [wasserstein_distance(u_values=df1, v_values=df2)],
+            #     "Cramér - von Mises(CM) distance(Energy distance)": [energy_distance(df1, df2)],
+            #     "Population Stability Index(PSI)": [calculate_psi(df1, df2)]
+            # }
+            # other_index_df = pd.DataFrame(other_index)
+            st.info("First Wasserstein Distance")
+            st.write(wasserstein_distance(u_values=df1, v_values=df2))
+            st.info("Cramér - von Mises(CM) distance(Energy distance)")
+            st.write(energy_distance(df1, df2))
+            st.info("Population Stability Index(PSI)")
+            st.write(calculate_psi(df1, df2))
 
-            st.table(other_index_df.assign(hack='').set_index('hack'))
+            # st.table(other_index_df.assign(hack='').set_index('hack'))
             result = {
                 "fist_file_distribution": df1_info,
                 "second_file_distribution": df2_info,
-                "KS_test": ks_stat,
+                "KS_test": ks_2samp(df1, df2, alternative="two_sided"),
                 "wasserstein_distance": wasserstein_distance(u_values=df1, v_values=df2),
                 "cm_distance": energy_distance(df1, df2),
                 "psi": calculate_psi(df1, df2)
