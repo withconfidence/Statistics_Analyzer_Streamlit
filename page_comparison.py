@@ -815,8 +815,8 @@ def page_comparison():
                 "Cramér - von Mises(CM) distance(Energy distance)",
                 "Population StabilityIndex (PSI)"
             ]
-            display_item = st.multiselect("Select the items to be displayed.", list(range(len(eval_labels))),
-                                        format_func=lambda x: eval_labels[x])
+            # display_item = st.multiselect("Select the items to be displayed.", list(range(len(eval_labels))),
+            #                             format_func=lambda x: eval_labels[x])
 
             two_sided_stat, two_sided_p = ks_2samp(df1, df2, alternative="two_sided")
             less_stat, less_p = ks_2samp(df1, df2, alternative="less")
